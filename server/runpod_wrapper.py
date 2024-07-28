@@ -1,42 +1,42 @@
 import runpod
-from typing import Any, TypedDict
-import requests
-import sys
+import httpx
+import traceback
+import os
+
+concurrency_max = int(os.getenv("CONCURRENCY_MAX", 6))
+request_timeout = float(os.getenv("REQUEST_TIMEOUT", 300.0))
+
+limits = httpx.Limits(max_connections=concurrency_max, max_keepalive_connections=concurrency_max)
+client = httpx.AsyncClient(verify=False, limits=limits, timeout=request_timeout)
+
+async def handler(job):
+    try:
+        base_url = "http://0.0.0.0:11434"
+        input = job['input']
+        if 'url_path' not in input:
+            raise Exception(f"Property url_path is required but not found in job-keys {input.keys()}")
+        url_path = input['url_path']
+        if url_path not in ['/api/chat', '/api/generate']:
+            raise Exception(f"Invalid url_path: {url_path}")
+        response = await client.post(
+            url=f"{base_url}{url_path}",
+            headers={"Content-Type": "application/json"},
+            json=input,
+        )
+        response.encoding = "utf-8"
+
+        # TODO: handle errors
+        result = response.json()
+        print("Result:", result)
+        return result
+    except Exception as e:
+        print("Error:", str(e))
+        print("Error occurred:")
+        print(traceback.format_exc())
+        return {"error": str(e)}
 
 
-class HandlerInput(TypedDict):
-    """The data for calling the Ollama service."""
-
-    method_name: str
-    """The url endpoint of the Ollama service to make a post request to."""
-
-    input: Any
-    """The body of the post request to the Ollama service."""
-
-
-class HandlerJob(TypedDict):
-    input: HandlerInput
-
-
-def handler(job: HandlerJob):
-    base_url = "http://0.0.0.0:11434"
-    input = job["input"]
-
-    # streaming is not supported in serverless mode
-    input["input"]["stream"] = False
-    print(sys.argv)
-    model = sys.argv[1]
-    input["input"]["model"] = model
-
-    response = requests.post(
-        url=f"{base_url}/{input['method_name']}",
-        headers={"Content-Type": "application/json"},
-        json=input["input"],
-    )
-    response.encoding = "utf-8"
-
-    # TODO: handle errors
-    return response.json()
-
-
-runpod.serverless.start({"handler": handler})
+runpod.serverless.start({
+    "handler": handler,
+    "concurrency_modifier": lambda _: concurrency_max
+    })

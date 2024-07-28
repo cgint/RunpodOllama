@@ -1,5 +1,5 @@
 # Use an official base image with your desired version
-FROM ollama/ollama:0.2.8
+FROM ollama/ollama:0.3.0
 
 ENV PYTHONUNBUFFERED=1 
 
@@ -29,12 +29,10 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install --yes --quiet --no-install-re
 RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 999 \
     && update-alternatives --config python3 && ln -s /usr/bin/python3 /usr/bin/python
 
-RUN pip install --upgrade pip
+RUN pip install --upgrade pip --no-cache-dir && pip install runpod --no-cache-dir
 
 # Add your file
 ADD . .
-
-RUN pip install runpod
 
 # Override Ollama's entrypoint
 ENTRYPOINT ["bin/bash", "start.sh"]
